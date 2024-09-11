@@ -3,7 +3,7 @@ import treeKill from 'tree-kill';
 
 import blockedHostsList from './blocked-hosts';
 
-import { getDurationInDays, formatDate, getCleanText, getLocationFromText, statusLog, getHostname } from './utils'
+import { getDurationInDays, formatDate, getCleanText, getLocationFromText, statusLog, getHostname, waitForNetworkIdle } from './utils'
 import { SessionExpired } from './errors';
 
 export interface Location {
@@ -518,12 +518,15 @@ export class LinkedInProfileScraper {
 
       statusLog(logSection, `Navigating to LinkedIn profile: ${profileUrl}`, scraperSessionId)
 
-      await page.goto(profileUrl, {
-        // Use "networkidl2" here and not "domcontentloaded".
-        // As with "domcontentloaded" some elements might not be loaded correctly, resulting in missing data.
-        waitUntil: "networkidle2",
-        timeout: this.options.timeout
-      });
+      /* for some reason the network idle event doesn't fire on chrome and the session times out. 
+          This is a work around */
+      await Promise.all([
+        page.goto(profileUrl, {
+          timeout: this.options.timeout,
+          waitUntil: ["domcontentloaded"],
+        }),
+        waitForNetworkIdle({ page, maxInflightRequests: 0 }),
+      ]);
 
       statusLog(logSection, 'LinkedIn profile page loaded!', scraperSessionId)
 

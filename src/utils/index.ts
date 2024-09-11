@@ -171,3 +171,82 @@ export const autoScroll = async (page: Page) => {
 export const getHostname = (url: string) => {
   return new URL(url).hostname;
 };
+
+/* ref - https://github.com/puppeteer/puppeteer/issues/1353#issuecomment-648299486 */
+export function waitForNetworkIdle({
+  page,
+  timeout = 30000,
+  waitForFirstRequest = 1000,
+  waitForLastRequest = 200,
+  maxInflightRequests = 0,
+}) {
+  let inflight = 0;
+  let resolve;
+  let reject;
+  let firstRequestTimeoutId;
+  let lastRequestTimeoutId;
+  let timeoutId;
+  maxInflightRequests = Math.max(maxInflightRequests, 0);
+
+  function cleanup() {
+    clearTimeout(timeoutId);
+    clearTimeout(firstRequestTimeoutId);
+    clearTimeout(lastRequestTimeoutId);
+    /* eslint-disable no-use-before-define */
+    page.removeListener("request", onRequestStarted);
+    page.removeListener("requestfinished", onRequestFinished);
+    page.removeListener("requestfailed", onRequestFinished);
+    /* eslint-enable no-use-before-define */
+  }
+
+  function check() {
+    if (inflight <= maxInflightRequests) {
+      clearTimeout(lastRequestTimeoutId);
+      lastRequestTimeoutId = setTimeout(
+        onLastRequestTimeout,
+        waitForLastRequest
+      );
+    }
+  }
+
+  function onRequestStarted() {
+    clearTimeout(firstRequestTimeoutId);
+    clearTimeout(lastRequestTimeoutId);
+    inflight += 1;
+  }
+
+  function onRequestFinished() {
+    inflight -= 1;
+    check();
+  }
+
+  function onTimeout() {
+    cleanup();
+    reject(new Error("Timeout"));
+  }
+
+  function onFirstRequestTimeout() {
+    cleanup();
+    resolve();
+  }
+
+  function onLastRequestTimeout() {
+    cleanup();
+    resolve();
+  }
+
+  page.on("request", onRequestStarted);
+  page.on("requestfinished", onRequestFinished);
+  page.on("requestfailed", onRequestFinished);
+
+  timeoutId = setTimeout(onTimeout, timeout); // Overall page timeout
+  firstRequestTimeoutId = setTimeout(
+    onFirstRequestTimeout,
+    waitForFirstRequest
+  );
+
+  return new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+}
