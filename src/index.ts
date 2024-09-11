@@ -521,7 +521,8 @@ export class LinkedInProfileScraper {
       await page.goto(profileUrl, {
         // Use "networkidl2" here and not "domcontentloaded". 
         // As with "domcontentloaded" some elements might not be loaded correctly, resulting in missing data.
-        waitUntil: 'networkidle2',
+        /* !!!networkidl2 is causing page to hang! probably an issue with linkedin but until that is fixed, will defer to domcontentloaded */
+        waitUntil: "domcontentloaded",
         timeout: this.options.timeout
       });
 
